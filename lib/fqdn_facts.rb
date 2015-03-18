@@ -41,18 +41,18 @@ module FqdnFacts
     # @return FqdnFacts::BaseHandler derived class
     #
     def register(klass, options={}, &block)
-      klass_const  = klass.constantize
-      unless const_defined? klass_const
-        self.const_set(klass_const, Class.new(BaseHandler))
+      klass_const = klass.to_s.camelize
+      unless BaseHandler.const_defined? klass_const
+        BaseHandler.const_set(klass_const, Class.new(BaseHandler))
       end
 
       if other = options.delete(:copy)
         unless other = @registry[other.to_sym]
           fail Error::HandlerNotFound, other
         end
-        @registry[klass.to_sym] = self.const_get(klass_const).copy_from(other)
+        @registry[klass.to_sym] = BaseHandler.const_get(klass_const).copy_from(other)
       else
-        @registry[klass.to_sym] = self.const_get(klass_const).new
+        @registry[klass.to_sym] = BaseHandler.const_get(klass_const).new
       end
 
 

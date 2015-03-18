@@ -36,28 +36,14 @@ module FqdnFacts
 
     # default validation hash of FQDN components
     DEFAULT_COMPONENTS = {
-      host: {
-        type: %r:([a-z]+[a-z0-9-]*[a-z]*):i,
-        id: %r'(\d{2,})',
-        subtype: %r:([ms]?):i
-      },
+      host: %r'(.+)',
       sub: %r:(.+):,
-      tld: %r'(fs4.us)'
+      tld: %r'(.+)'
     } unless defined? DEFAULT_COMPONENTS
     private_constant :DEFAULT_COMPONENTS
 
     # default conversions to be performed
-    DEFAULT_CONVERSIONS = {
-      host: {
-        id: ->(v) { v.to_i },
-        subtype: ->(v) {
-          case v
-            when 'm' then :master
-            when 's' then :slave
-          end
-        }
-      }
-    } unless defined? DEFAULT_CONVERSIONS
+    DEFAULT_CONVERSIONS = { } unless defined? DEFAULT_CONVERSIONS
     private_constant :DEFAULT_CONVERSIONS
 
     # initilalizer
@@ -70,7 +56,7 @@ module FqdnFacts
       @fqdn            = ''
 
       add_fact :fqdn, ->() { @fqdn }
-      add_fact :fqdn_facts_class, self.class.to_s.split('::').last.underscore
+      add_fact :handler_name, self.class.to_s.split('::').last.underscore
     end
 
     ## DSL Methods
@@ -109,7 +95,13 @@ module FqdnFacts
       v = case validate
         when :any then %r:(.+):
         when Hash then
-          @components[component.to_sym].merge(
+          if @components[component.to_sym].is_a?(Hash)
+            basis = @components[component.to_sym]
+          else
+            basis = {}
+          end
+
+          basis.merge(
             Hash[validate.keys.zip(
               validate.values.collect {|v|
                 case v
@@ -201,7 +193,7 @@ module FqdnFacts
 
       # handle conversions
       facts.each do |key, value|
-        if value.is_a?(Prod)
+        if value.is_a?(Proc)
           value = value.arity == 1 ? value.call(facts) : value.call()
         end
         facts[key] = value.is_a?(Symbol) ? value.to_s : value
