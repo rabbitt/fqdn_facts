@@ -51,12 +51,11 @@ FqdnFacts.register(:baseline) do
     id: ->(v) { v.to_i }
   }
 
-  # facts generated dynamically using procs/lambdas 
-  # are calculated after all conversions, and in 
-  # order of assignment. If you use a lambda/proc, it will
-  # is expected to receive at most 1 parameter. If you receive
-  # for one, then that parameter will contain the list of facts
-  # generated up until that point. 
+  # facts generated dynamically using procs/lambdas are calculated
+  # after all conversions, and in order order of assignment. If you 
+  # use a lambda/proc, it is expected to receive at most one parameter. 
+  # If you receive for one, then that parameter will contain a hash of 
+  # facts generated up until that point. 
   add_fact :hostname, ->(f) { f[:host] }
   add_fact :domain, ->(f) { [f[:sub], f[:tld]].join('.') }
 end # this essentially matches ([a-z][a-z-]*[a-z])(\d{2,})([ms]?)\.([^\.]+)\.bar\.com
