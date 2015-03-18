@@ -24,8 +24,10 @@ An example is (hopefully) worth a thousand words:
 require 'facter'
 require 'fqdn_facts'
 
+# setup a baseline handler that we can use as a "catch-all"
+# as well as a foundation to derive from with other handlers.
 FqdnFacts.register(:baseline) do
-  priority 10
+  priority 1000 # we want this to be used last as a catch-all
   
   # this defines the order of the components
   components :host, :sub, :tld
@@ -64,6 +66,7 @@ end # this essentially matches ([a-z][a-z-]*[a-z])(\d{2,})([ms]?)\.([^\.]+)\.bar
 # that we defined in :baseline aside from any settings
 # that we override in :qa.
 FqdnFacts.register(:qa, copy: :baseline) do
+  priority 10
   component :sub, %r:qa\d*:
   add_fact :env, 'qa'
 end # this matches ([a-z][a-z-]*[a-z])(\d{2,})([ms]?)\.qa\d+\.bar\.com
@@ -72,6 +75,10 @@ end # this matches ([a-z][a-z-]*[a-z])(\d{2,})([ms]?)\.qa\d+\.bar\.com
 # defined :host component (e.g., it doesn't use id/subtype), but is instead
 # a static value.
 FqdnFacts.register(:qa_foo_server, :baseline) do
+  # we can set this to the same priority as the :qa handler because
+  # the :qa handler will fail on the :host component for foo-server
+  # which will allow this handler to pick it up.
+  priority 10 
   component :host, 'foo-server'
 end # this matches foo-server\.qa\d+\.bar\.com
 
