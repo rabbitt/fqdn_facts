@@ -8,10 +8,10 @@ Gem::Specification.new do |spec|
   spec.version       = FqdnFacts::VERSION
   spec.authors       = ["Carl P. Corliss"]
   spec.email         = ["rabbitt@gmail.com"]
-  spec.summary       = %q{TODO: Write a short summary. Required.}
-  spec.description   = %q{TODO: Write a longer description. Optional.}
-  spec.homepage      = ""
-  spec.license       = "MIT"
+  spec.summary       = %q{Provides a DSL for generating FQDN specific facts that can be used with Facter}
+  spec.description   = %q{FqdnFacts allows you to create fact handlers for different FQDN formats. This is primarily intended for use with Puppet/Facter to facilitate dynamic fact generation based on FQDNs.}
+  spec.homepage      = "https://github.com/rabbitt/fqdn_facts/"
+  spec.license       = "GPLv2"
 
   spec.files         = `git ls-files -z`.split("\x0")
   spec.executables   = spec.files.grep(%r{^bin/}) { |f| File.basename(f) }
