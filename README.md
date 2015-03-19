@@ -2,6 +2,10 @@
 
 FqdnFacts allows you to create fact handlers for different FQDN formats. This is primarily intended for use with Puppet/Facter to facilitate dynamic fact generation based on FQDNs.
 
+## Status
+
+<img src="https://travis-ci.org/rabbitt/fqdn_facts.svg?branch=master" />
+
 ## Installation
 
 Add this line to your application's Gemfile:
