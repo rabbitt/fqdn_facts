@@ -39,7 +39,6 @@ module FqdnFacts
     # @param block   Block  block of DSL code
     #
     # @return FqdnFacts::BaseHandler derived class
-    #
     def register(klass, options={}, &block)
       klass_const = klass.to_s.camelize
       unless BaseHandler.const_defined? klass_const
