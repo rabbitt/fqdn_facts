@@ -26,7 +26,7 @@ module FqdnFacts
   class BaseHandler
     class << self
       # Creates a new instance of this object using the internal state
-      # of another similar object
+      # of another handler object
       def copy_from(other)
         new(other.export)
       end
@@ -42,14 +42,10 @@ module FqdnFacts
     } unless defined? DEFAULT_COMPONENTS
     private_constant :DEFAULT_COMPONENTS
 
-    # default conversions to be performed
-    DEFAULT_CONVERSIONS = { } unless defined? DEFAULT_CONVERSIONS
-    private_constant :DEFAULT_CONVERSIONS
-
     # initilalizer
     def initialize(data = {})
       @priority        = data.delete(:priority)        || 1
-      @conversions     = data.delete(:conversions)     || DEFAULT_CONVERSIONS.dup
+      @conversions     = data.delete(:conversions)     || {}
       @components      = data.delete(:components)      || DEFAULT_COMPONENTS.dup
       @component_order = data.delete(:component_order) || DEFAULT_COMPONENTS.keys
       @facts           = data.delete(:facts)           || {}

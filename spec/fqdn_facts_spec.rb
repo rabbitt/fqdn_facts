@@ -7,11 +7,7 @@ describe FqdnFacts do
 
       components :host, :sub, :tld
 
-      component :host, {
-        type:    %r'^([^\d]+)',
-        id:      %r'(\d+)',
-        subtype: %r'([ms]?)'
-      }
+      component :host, { type: %r'^([^\d]+)', id: %r'(\d+)', subtype: %r'([ms]?)'}
       component :tld, 'example.com'
 
       convert :host, {
