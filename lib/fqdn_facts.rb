@@ -26,7 +26,7 @@ require 'fqdn_facts/core_ext'
 module FqdnFacts
   @registry = {}
 
-  autoload :BaseHandler, 'fqdn_facts/base_handler'
+  autoload :Handler, 'fqdn_facts/handler'
   autoload :Error, 'fqdn_facts/errors'
 
   class << self
@@ -34,24 +34,26 @@ module FqdnFacts
 
     # Registers a FQDN Fact Handler
     #
-    # @param klass   Symbol name of handler to register
-    # @param options Hash   options to pass
-    # @param block   Block  block of DSL code
+    # @param klass    <Symbol> name of handler to register
+    # @param options  [Hash]   options to pass
+    # @option options [Symbol] :copy existing handler to copy definition from
+    # @param block    [Block]  block of DSL code
     #
-    # @return FqdnFacts::BaseHandler derived class
+    # @raise [Error::HandlerNotFound] if the requested copy handler doesn't exist
+    # @return <Handler>
     def register(klass, options = {}, &block)
       klass_const = klass.to_s.camelize
-      unless BaseHandler.const_defined? klass_const
-        BaseHandler.const_set(klass_const, Class.new(BaseHandler))
+      unless Handler.const_defined? klass_const
+        Handler.const_set(klass_const, Class.new(Handler))
       end
 
       if other = options.delete(:copy)
         unless other = @registry[other.to_sym]
           fail Error::HandlerNotFound, other
         end
-        @registry[klass.to_sym] = BaseHandler.const_get(klass_const).copy_from(other)
+        @registry[klass.to_sym] = Handler.const_get(klass_const).copy_from(other)
       else
-        @registry[klass.to_sym] = BaseHandler.const_get(klass_const).new
+        @registry[klass.to_sym] = Handler.const_get(klass_const).new
       end
 
 
@@ -67,9 +69,10 @@ module FqdnFacts
     # Retrieves a handler that is capable of generating facts
     # for the given FQDN
     #
-    # @param fqdn String Fully qualified domain name to resolve into a handler
+    # @param fqdn <String> Fully qualified domain name to resolve into a handler
     #
-    # @return FqdnFacts::BaseHandler derived class
+    # @raise [Error::UnresolveableHandler] if unable to find a handler for the given fqdn
+    # @return <Handler>
     def handler(fqdn)
       if (handlers = @registry.values.select { |klass| klass.match?(fqdn) }).empty?
         fail Error::UnresolveableHandler, "unable to find a handler for FQDN:#{fqdn}"
