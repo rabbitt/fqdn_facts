@@ -75,7 +75,39 @@ class String
   def camelize
     self.split('_').collect(&:capitalize).join
   end
+
+  # Attempts to transform string into a class constant
+  def constantize(base=Object)
+    self.split('/')
+        .collect(&:camelize)
+        .inject(base) { |obj,klass| obj.const_get(klass) }
+  end
 end
 
+class Proc
+  # @see http://stackoverflow.com/a/10059209/988225
+  def call_with_vars(vars, *args)
+    begin
+      Struct.new(*vars.keys).new(*vars.values).instance_exec(*args, &self)
+    rescue NameError => e
+      # don't error out - just warn
+      file, line = e.backtrace.first.split(':')
+      name = e.message.split(/[`']/)[1]
+      warn "Couldn't find value for key '#{name}' at #{file}:#{line}"
+    end
+  end
+end
 
+class Symbol
+  def include?(needle)
+    to_s.include? needle
+  end
 
+  def constantize(*args)
+    to_s.constantize(*args)
+  end
+
+  def split(*args)
+    to_s.split(*args)
+  end
+end

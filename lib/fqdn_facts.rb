@@ -42,16 +42,19 @@ module FqdnFacts
     # @raise [Error::HandlerNotFound] if the requested copy handler doesn't exist
     # @return <Handler>
     def register(klass, options = {}, &block)
+      parent_name  = (v = options.delete(:copy)).nil? ? :handler : v.to_sym
+      parent_class = parent_name == :handler ? Handler : parent_name.constantize(Handler)
+
       klass_const = klass.to_s.camelize
       unless Handler.const_defined? klass_const
-        Handler.const_set(klass_const, Class.new(Handler))
+        Handler.const_set(klass_const, Class.new(parent_class))
       end
 
-      if other = options.delete(:copy)
-        unless other = @registry[other.to_sym]
+      if parent_name != :handler
+        unless parent = @registry[parent_name]
           fail Error::HandlerNotFound, other
         end
-        @registry[klass.to_sym] = Handler.const_get(klass_const).copy_from(other)
+        @registry[klass.to_sym] = Handler.const_get(klass_const).copy_from(parent)
       else
         @registry[klass.to_sym] = Handler.const_get(klass_const).new
       end

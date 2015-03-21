@@ -35,7 +35,7 @@ module FqdnFacts
       end
     end
 
-    attr_accessor :priority, :fqdn
+    attr_accessor :priority, :fqdn, :facts
 
     # default validation hash of FQDN components
     DEFAULT_COMPONENTS = {
@@ -61,8 +61,9 @@ module FqdnFacts
       @facts           = data.delete(:facts)           || {}
       @fqdn            = ''
 
-      add_fact :fqdn, ->() { @fqdn }
-      add_fact :handler_name, self.class.to_s.split('::').last.underscore
+      add_fact(:fqdn) { fqdn }
+      add_fact(:handler_class, self.class.to_s)
+      add_fact(:handler_name) { handler_class.split('::').last.underscore }
     end
 
     ## DSL Methods
@@ -92,12 +93,12 @@ module FqdnFacts
     # @param args <Array<Symbol>> list of ordered components
     # @raise [ArgumentError] if args is empty
     def order(*args)
-      raise ArgumentError, 'empty list of components' unless order.present?
+      raise ArgumentError, 'empty list of components' unless args.present?
       @order = args
     end
     alias_method :components, :order
 
-    # Define a validation rule for a component.
+    # Define a component's validation rule.
     #
     # Validation rules can be one of the following
     #   * :any (the same as /.+/)
@@ -142,21 +143,29 @@ module FqdnFacts
 
       @components[component.to_sym]  = v
     end
-    alias_method :validate, :component
 
     # Defines a conversion rule for a given component.
     # The conversion must be a Proc/Lambda
     #
     # @param component <Symbol> the name of the component to set validation for
-    # @param conversion <Proc> the conversion proc/lambda
-    def convert(component, conversion)
-      conversion = case conversion
-        when Hash then
-          @conversions[component.to_sym] ||= {}
-          @conversions[component.to_sym].merge(conversion)
-        else conversion
+    # @param conversion [Hash,Proc] optional conversion hash, proc/lambda
+    # @param block [Proc] optional block
+    # @raise [ArgumentError] if conversion isn't Hash, Proc or Block
+    def convert(component, conversion=nil, &block)
+      unless [Proc, Hash].any? { |klass| conversion.is_a?(klass) } || block_given?
+        raise ArgumentError, 'expected Hash, Proc or Block'
       end
-      @conversions[component.to_sym] = conversion
+
+      component  = component.to_sym
+      conversion = conversion || block
+
+      conversion = if conversion.is_a? Hash
+        (@conversions[component]||={}).merge(conversion)
+      else
+        conversion
+      end
+
+      @conversions[component] = conversion
     end
 
     # Returns the value of a fact
@@ -171,14 +180,15 @@ module FqdnFacts
     #
     # @param name <String> Symbol name of the fact to add
     # @param value <Scalar,Array,Hash,Proc> value of the fact
-    def add_fact(name, value)
-      @facts[name.to_sym] = value
+    def add_fact(name, value=nil, &block)
+      value = block if block_given?
+      facts[name.to_sym] = value
     end
 
     # Removes a fact from the list of facts.
     # @param name <String,Symbol> name of the fact to remove
     def remove_fact(name)
-      @facts.delete(name.to_sym)
+      facts.delete(name.to_sym)
     end
 
     ### End of DSL Methods
@@ -195,14 +205,14 @@ module FqdnFacts
       prefix = options.delete(:prefix)
       only   = (o = options.delete(:only)).empty? ? nil : o.collect(&:to_sym)
 
-      merged_facts.dup.tap do |facts|
+      assemble.dup.tap do |facts|
         facts.replace(
-          facts.inject({}) do |hash, (fact, value)|
+          Hash[facts.inject({}) do |hash, (fact, value)|
             next hash unless only.empty? || only.include?(fact)
-            key = prefix.empty? ? key : "#{prefix}_#{key}"
+            key = prefix.empty? ? fact : "#{prefix}_#{fact}"
             hash[key] = value
             hash
-          end
+          end.sort]
         )
       end
     end
@@ -215,12 +225,11 @@ module FqdnFacts
     end
 
     # legacy support method
-
     alias_method :retrieve_facts, :all
 
     # @return Hash all aggregate facts
     def to_h
-      merged_facts.dup
+      merge_facts.dup
     end
 
     # Checks to see if the fqdn matches this particular FQDN Fact Handler
@@ -283,48 +292,74 @@ module FqdnFacts
 
     private
 
-    # Merges and freezes all the facts
+    # Assemble facts from gathered data
+    # @return [self]
     # @api private
-    def merge_facts
-      @merged ||= begin
-        facts = @facts.merge(Hash[fqdn_components]).
-                  reject { |k,v| facts.include? v }
+    def assemble
+      { }.tap do |data|
+        data.merge!(facts.merge(Hash[fqdn_components]))
 
-        # build facts from components
+        # expand subtypes
         @components.each do |name, value|
-          case value
-          when Hash then
-            data = facts[name].scan(Regexp.new(value.values.join)).flatten
-            value.keys.zip(data).each do |key, v|
-              if @conversions[name] && @conversions[name][key]
-                facts["#{name}_#{key}".to_sym] = @conversions[name][key].call(v)
-              else
-                facts["#{name}_#{key}".to_sym] = v
-              end
+          # components are converted explicitly during expansino, and solely
+          # based on their value
+          conversion = @conversions[name]
+
+          if value.is_a? Hash
+            subdata = data[name].scan(Regexp.new(value.values.join)).flatten
+            value.keys.zip(subdata).each do |subkey, subvalue|
+              conversion = @conversions[name].try(:[], subkey)
+              data[:"#{name}_#{subkey}"] = convert_value(subvalue, conversion)
             end
           else
-            if @conversions[name]
-              facts[name] = @conversions[name].call(facts[name])
-            end
-            @facts.merge!(name.to_sym => value)
+            data[name] = convert_value(data[name], conversion)
           end
         end
 
-        # handle conversions
-        facts.each do |key, value|
-          if value.is_a?(Proc)
-            value = value.arity == 1 ? value.call(facts) : value.call()
+        # handle any remaining runtime generated facts
+        data.each do |fact, value|
+          case value
+            when Proc then value = convert_value(data, value)
+            when Symbol then value
+            else next
           end
-          facts[key] = value.is_a?(Symbol) ? value.to_s : value
+          data[fact] = value.is_a?(Symbol) ? value.to_s : value
         end
 
-        facts.reject { |k,v| v.empty? }
-      end.freeze
+        data.reject! { |fact, value| value.empty? }
+      end
+    end
+
+    def convert_value(value, converter)
+      case converter
+        when Proc then
+          bind_data = value.is_a?(Hash) ? value.dup : { value: value }
+          bind_data.merge!({
+            fqdn:          fqdn,
+            components:    Hash[fqdn_components],
+            priority:      priority,
+            handler_class: self.class.name
+          })
+
+          value = if converter.arity == 1
+            converter.call_with_vars(bind_data, value)
+          else
+            converter.call_with_vars(bind_data)
+          end
+          value.is_a?(Symbol) ? value.to_s : value
+
+        when :symbol then value.to_sym
+        when :integer, Integer then value.to_i
+        when :float, Float then value.to_f
+        when :string, String then value.to_s
+        when :array, Array then Array(value)
+        else value
+      end
     end
 
     # @api private
     def fqdn_data
-      @fqdn.split('.', @order.size)
+      fqdn.split('.', @order.size)
     end
 
     # @api private
