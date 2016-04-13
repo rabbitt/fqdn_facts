@@ -17,6 +17,10 @@
 =end
 
 module FqdnFacts
-  # The current FqdnFacts version
-  VERSION = "0.2.0"
+  MAJOR = 0
+  MINOR = 3
+  PATCH = 0
+
+  VERSION     = "%d.%d.%d" % [ MAJOR, MINOR, PATCH ]
+  GEM_VERSION = Gem::Version.new(VERSION)
 end

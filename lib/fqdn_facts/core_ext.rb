@@ -23,7 +23,7 @@ class Object
   #
   # @return [false]
   def empty?
-    return false
+    false
   end
 
   # returns true if the object "contains" data
@@ -41,11 +41,9 @@ class Object
   #
   # @return the result of the method call, if the method exists, or nil if it doesn't
   def try(method, *args, &block)
-    begin
-      self.public_send(method, *args, &block)
-    rescue NoMethodError
-      nil
-    end
+    public_send(method, *args, &block)
+  rescue NoMethodError
+    nil
   end
 end
 
@@ -67,34 +65,32 @@ class String
   # converts a camelized string to underscored
   # @return String
   def underscore
-    self.split(/([A-Z][a-z0-9]+)/).reject(&:empty?).collect(&:downcase).join('_')
+    split(/([A-Z][a-z0-9]+)/).reject(&:empty?).collect(&:downcase).join('_')
   end
 
   # converts an underscored string to a camelized one
   # @return String
   def camelize
-    self.split('_').collect(&:capitalize).join
+    split('_').collect(&:capitalize).join
   end
 
   # Attempts to transform string into a class constant
-  def constantize(base=Object)
-    self.split('/')
-        .collect(&:camelize)
-        .inject(base) { |obj,klass| obj.const_get(klass) }
+  def constantize(base = Object)
+    split('/')
+      .collect(&:camelize)
+      .inject(base) { |obj, klass| obj.const_get(klass) }
   end
 end
 
 class Proc
   # @see http://stackoverflow.com/a/10059209/988225
   def call_with_vars(vars, *args)
-    begin
-      Struct.new(*vars.keys).new(*vars.values).instance_exec(*args, &self)
-    rescue NameError => e
-      # don't error out - just warn
-      file, line = e.backtrace.first.split(':')
-      name = e.message.split(/[`']/)[1]
-      warn "Couldn't find value for key '#{name}' at #{file}:#{line}"
-    end
+    Struct.new(*vars.keys).new(*vars.values).instance_exec(*args, &self)
+  rescue NameError
+    # don't error out - just warn
+    file, line = $!.backtrace.first.split(':')
+    name = $!.message.split(/[`']/)[1]
+    warn "Couldn't find value for key '#{name}' at #{file}:#{line}"
   end
 end
 

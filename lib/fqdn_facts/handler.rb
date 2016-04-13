@@ -54,12 +54,14 @@ module FqdnFacts
     # @option data [Array] :order sets the initial order of components
     # @option data [Hash] :facts sets the initial set of facts
     def initialize(data = {})
-      @priority        = data.delete(:priority)        || 1
-      @conversions     = data.delete(:conversions)     || {}
-      @components      = data.delete(:components)      || DEFAULT_COMPONENTS.dup
-      @order           = data.delete(:order)           || DEFAULT_COMPONENTS.keys
-      @facts           = data.delete(:facts)           || {}
+      # rubocop:disable Style/SpaceAroundOperators
+      @priority        = data.delete(:priority)    || 1
+      @conversions     = data.delete(:conversions) || {}
+      @components      = data.delete(:components)  || DEFAULT_COMPONENTS.dup
+      @order           = data.delete(:order)       || DEFAULT_COMPONENTS.keys
+      @facts           = data.delete(:facts)       || {}
       @fqdn            = ''
+      # rubocop:enable Style/SpaceAroundOperators
 
       add_fact(:fqdn) { fqdn }
       add_fact(:handler_class, self.class.to_s)
@@ -108,8 +110,8 @@ module FqdnFacts
     #
     # @param component <Symbol> the name of the component to set validation for
     # @param validate [Hash{Symbol=>Symbol,Hash,Array,Scalar}] validation to perform for component
-    def component(component, validate=:any)
-      v = case validate
+    def component(component, validate = :any)
+      value = case validate
         when :any then %r:(.+):
         when Hash then
           if @components[component.to_sym].is_a?(Hash)
@@ -136,12 +138,12 @@ module FqdnFacts
 
       if @components[component.to_sym]
         # if their not the same class, then remove any conversions
-        unless @components[component.to_sym].is_a?(v.class)
+        unless @components[component.to_sym].is_a?(value.class)
           @conversions.delete(component.to_sym)
         end
       end
 
-      @components[component.to_sym]  = v
+      @components[component.to_sym] = value
     end
 
     # Defines a conversion rule for a given component.
@@ -151,16 +153,16 @@ module FqdnFacts
     # @param conversion [Hash,Proc] optional conversion hash, proc/lambda
     # @param block [Proc] optional block
     # @raise [ArgumentError] if conversion isn't Hash, Proc or Block
-    def convert(component, conversion=nil, &block)
+    def convert(component, conversion = nil, &block)
       unless [Proc, Hash].any? { |klass| conversion.is_a?(klass) } || block_given?
         raise ArgumentError, 'expected Hash, Proc or Block'
       end
 
       component  = component.to_sym
-      conversion = conversion || block
+      conversion ||= block
 
       conversion = if conversion.is_a? Hash
-        (@conversions[component]||={}).merge(conversion)
+        (@conversions[component] ||= {}).merge(conversion)
       else
         conversion
       end
@@ -180,7 +182,7 @@ module FqdnFacts
     #
     # @param name <String> Symbol name of the fact to add
     # @param value <Scalar,Array,Hash,Proc> value of the fact
-    def add_fact(name, value=nil, &block)
+    def add_fact(name, value = nil, &block)
       value = block if block_given?
       facts[name.to_sym] = value
     end
@@ -201,17 +203,16 @@ module FqdnFacts
     # @option options [Array<Symbol>] :only a list of specific facts to retrieve
     #
     # @return [Hash{Symbol=><Scalar,Hash,Array>}]
-    def retrieve(options={})
+    def retrieve(options = {})
       prefix = options.delete(:prefix)
       only   = (o = options.delete(:only)).empty? ? nil : o.collect(&:to_sym)
 
       assemble.dup.tap do |facts|
         facts.replace(
-          Hash[facts.inject({}) do |hash, (fact, value)|
-            next hash unless only.empty? || only.include?(fact)
+          Hash[facts.each_with_object({}) do |(fact, value), hash|
+            next unless only.empty? || only.include?(fact)
             key = prefix.empty? ? fact : "#{prefix}_#{fact}"
             hash[key] = value
-            hash
           end.sort]
         )
       end
@@ -265,7 +266,7 @@ module FqdnFacts
               debug "    #{validation.class} -> #{value.inspect} == #{validation.inspect} == #{r.inspect}"
             }
         end
-      end.tap { |r| debug " ---> validation #{r ? 'successful' : 'failed'} for #{self.class}"}
+      end.tap { |r| debug " ---> validation #{r ? 'successful' : 'failed'} for #{self.class}" }
     end
 
     # Compares the priority of this handler to another handler
@@ -273,34 +274,33 @@ module FqdnFacts
     # @param other <Handler> the handler to compare against
     # @return [-1, 0, 1] if other is <=, =, or >= self
     def <=>(other)
-      self.priority <=> other.priority
+      priority <=> other.priority
     end
 
     # Exports the internal state as a hash
     # @api private
     def export
-      instance_variables.inject({}) do |exports, name|
+      instance_variables.each_with_object({}) do |name, exports|
         varname = name.to_s.tr('@', '').to_sym
         exports[varname] = begin
           Marshal.load(Marshal.dump(instance_variable_get(name)))
         rescue TypeError
           instance_variable_get(name).dup
         end
-        exports
       end
     end
 
-    private
+  private
 
     # Assemble facts from gathered data
     # @return [self]
     # @api private
     def assemble
-      { }.tap do |data|
+      {}.tap do |data|
         data.merge!(facts.merge(Hash[fqdn_components]))
 
         # expand subtypes
-        @components.each do |name, value|
+        @components.select { |k, _| @order.include? k }.each do |name, value|
           # components are converted explicitly during expansino, and solely
           # based on their value
           conversion = @conversions[name]
@@ -316,17 +316,26 @@ module FqdnFacts
           end
         end
 
+        finished = false
+
         # handle any remaining runtime generated facts
-        data.each do |fact, value|
-          case value
-            when Proc then value = convert_value(data, value)
-            when Symbol then value
-            else next
+        until finished
+          finished = true
+          data.each do |fact, value|
+            case value
+              when Proc then
+                finished = false
+                value = convert_value(data, value)
+              when Symbol then
+                value
+              else
+                next
+            end
+            data[fact] = value.is_a?(Symbol) ? value.to_s : value
           end
-          data[fact] = value.is_a?(Symbol) ? value.to_s : value
         end
 
-        data.reject! { |fact, value| value.empty? }
+        data.reject! { |_, value| value.empty? }
       end
     end
 
@@ -334,12 +343,12 @@ module FqdnFacts
       case converter
         when Proc then
           bind_data = value.is_a?(Hash) ? value.dup : { value: value }
-          bind_data.merge!({
+          bind_data.merge!(
             fqdn:          fqdn,
             components:    Hash[fqdn_components],
             priority:      priority,
             handler_class: self.class.name
-          })
+          )
 
           value = if converter.arity == 1
             converter.call_with_vars(bind_data, value)
@@ -369,9 +378,7 @@ module FqdnFacts
 
     # @api private
     def debug(message)
-      if ENV.keys.collect(&:downcase).include? 'debug'
-        STDERR.puts message
-      end
+      STDERR.puts message if ENV.keys.collect(&:downcase).include? 'debug'
     end
   end
 end

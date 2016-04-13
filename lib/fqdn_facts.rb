@@ -59,7 +59,6 @@ module FqdnFacts
         @registry[klass.to_sym] = Handler.const_get(klass_const).new
       end
 
-
       if block.arity == 1
         yield @registry[klass.to_sym]
       else
